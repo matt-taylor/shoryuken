@@ -1,0 +1,56 @@
+version: '3'
+
+x-common-aws: &common-aws
+  AWS_ACCESS_KEY_ID: "foobar"
+  AWS_SECRET_ACCESS_KEY: "foobar"
+  AWS_LOCALSTACK_ENDPOINT: "http://localstack:4566"
+  AWS_REGION: "us-east-1"
+  AWS_DEFAULT_REGION: "us-east-1"
+
+x-common-environment: &common-environment
+  BUNDLE_GITHUB__COM: "${GITHUB_TOKEN}:x-oauth-basic"
+  <<: *common-aws
+
+services:
+  shoryuken:
+    stdin_open: true
+    tty: true
+    build:
+      dockerfile: .devcontainer/matt-taylor.dockerfile
+      context: .
+      args:
+        BUNDLE_GITHUB__COM: "${GITHUB_TOKEN}:x-oauth-basic"
+    env_file:
+      - .env
+    environment:
+      <<: *common-environment
+    volumes:
+      - .:/shoryuken
+      - ..:/local
+      - bundle-cache:/usr/local/bundle:delegated
+    depends_on:
+      - localstack
+
+  localstack:
+    container_name: shoryuken-localstack
+    image: localstack/localstack
+    healthcheck:
+      test: awslocal sqs list-queues
+      interval: 3s
+      timeout: 10s
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: "sqs"
+      DEBUG: "1"
+      HOSTNAME_EXTERNAL: "localstack"
+      HOST_TMP_FOLDER: "${TMPDIR:-/tmp/}localstack"
+      DOCKER_HOST: "unix:///var/run/docker.sock"
+      <<: *common-aws
+
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/tmp/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+volumes:
+  bundle-cache:
